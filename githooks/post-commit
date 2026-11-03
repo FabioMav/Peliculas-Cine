@@ -1,0 +1,27 @@
+#!/bin/sh
+# post-commit
+#
+# Hace "git push" automaticamente justo despues de cada commit, para no
+# tener que apretar "Push origin" a mano en GitHub Desktop. GitHub Desktop
+# usa git por debajo, asi que corre este hook igual que la terminal.
+#
+# No es parte de la consigna de la practica ni afecta a analizar.py ni al
+# workflow de Actions: es solo una comodidad local. Si el push falla (sin
+# conexion, o el remoto tiene commits que vos no tenes localmente), el
+# commit se hace igual, solo que no se sube; en ese caso GitHub Desktop va
+# a seguir mostrando el boton "Push origin" disponible, y conviene hacer
+# "Fetch origin" (o Pull) antes de volver a intentar.
+
+rama_actual=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$rama_actual" = "HEAD" ]; then
+  # commit en "detached HEAD" (sin rama activa): no hay a donde pushear.
+  exit 0
+fi
+
+echo "post-commit: haciendo push automatico a origin/$rama_actual..."
+git push origin "$rama_actual"
+if [ $? -ne 0 ]; then
+  echo "post-commit: el push automatico fallo. Hace Fetch origin (o Pull)"
+  echo "en GitHub Desktop y despues Push origin a mano."
+fi

@@ -50,6 +50,7 @@ analizar.py                   # validacion + calculo + generacion de public/inde
 test_analizar.py              # pruebas unittest, con datos propios (no el CSV real)
 .github/workflows/cine.yml    # workflow de CI (verificar) y CD (publicar)
 .gitignore                    # public/, __pycache__/, .venv/
+githooks/post-commit          # opcional: push automatico tras cada commit (ver mas abajo)
 public/index.html             # se genera al ejecutar analizar.py (no se versiona)
 ```
 
@@ -118,6 +119,47 @@ python analizar.py
 
 Despues abre `public/index.html` en el navegador y revisa que el total
 inicial sea **1794 peliculas**.
+
+## Push automatico al hacer commit (opcional, solo comodidad local)
+
+Por defecto, GitHub Desktop necesita que apretes **Commit** y despues,
+aparte, **Push origin**. Si queres que el push se haga solo apenas
+confirmas el commit, el proyecto ya trae un git hook (`githooks/post-commit`)
+que lo hace por vos. **No es parte de la consigna ni afecta a Actions** —
+es solo para no tener que apretar el segundo boton.
+
+Los hooks de la carpeta `.git/hooks` no viajan con el repositorio (esa
+carpeta nunca se sube a GitHub), asi que para activarlo hay que correr
+**una sola vez**, en la terminal de VS Code, parado en la raiz del
+proyecto:
+
+```bash
+git config core.hooksPath githooks
+```
+
+Eso le dice a git que use la carpeta `githooks/` del proyecto (que si esta
+en el repositorio) en vez de la carpeta oculta de siempre. En Mac o Linux
+tambien conviene asegurarse de que el archivo sea ejecutable:
+
+```bash
+chmod +x githooks/post-commit
+```
+
+(En Windows con Git para Windows normalmente no hace falta este ultimo
+paso.)
+
+Despues de esto, cada vez que hagas **Commit to main** en GitHub Desktop,
+el push a `origin` sale solo — vas a ver un mensaje tipo
+`post-commit: haciendo push automatico a origin/main...` en la terminal
+integrada de GitHub Desktop (pestaña "History" o el log del commit). Si
+por algun motivo el push automatico falla (por ejemplo sin conexion, o
+el remoto tiene cambios que vos no tenes localmente), el commit se hace
+igual — solo que no se sube — y GitHub Desktop va a seguir mostrando el
+boton "Push origin" disponible; en ese caso hace falta un "Fetch origin"
+(o Pull) y despues si, Push origin a mano.
+
+Esto es por repositorio: si cloná el proyecto en otra carpeta o en otra
+compu, hay que correr el `git config` de nuevo ahi.
 
 ## Pasos para publicarlo (resumen de la practica)
 
