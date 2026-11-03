@@ -11,6 +11,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 import analizar
 
@@ -145,7 +146,13 @@ class TestGeneracionDeInforme(unittest.TestCase):
 
     def test_main_genera_informe_con_datos_validos(self):
         self._escribir_csv(FILAS_EJEMPLO)
-        analizar.main()
+        # GitHub Actions setea GITHUB_SHA automaticamente en cada corrida,
+        # asi que para probar el caso "local" hay que quitarlo a proposito
+        # en vez de confiar en que el entorno no lo tenga (en local no esta,
+        # pero en el runner de Actions si, y por eso fallaba ahi).
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GITHUB_SHA", None)
+            analizar.main()
 
         self.assertTrue(os.path.exists("public/index.html"))
         with open("public/index.html", encoding="utf-8") as f:
@@ -154,10 +161,22 @@ class TestGeneracionDeInforme(unittest.TestCase):
         self.assertIn("Fabio Mavric", contenido)
         self.assertIn("Copia educativa: contiene modificaciones simuladas", contenido)
         self.assertIn("CC BY 4.0", contenido)
-        self.assertIn("local", contenido)  # GITHUB_SHA no esta seteado en el test
+        self.assertIn("Commit: <code>local</code>", contenido)
         # el titulo con entidad HTML debe quedar decodificado y re-escapado correctamente
         self.assertIn("Pelicula Tres &amp; Cia", contenido)
         self.assertNotIn("beneficio", contenido.lower())
+
+    def test_main_usa_github_sha_cuando_esta_seteado(self):
+        """En Actions, GITHUB_SHA esta seteado: el informe debe mostrar ese
+        commit en vez de 'local'."""
+        self._escribir_csv(FILAS_EJEMPLO)
+        with mock.patch.dict(os.environ, {"GITHUB_SHA": "abc1234"}):
+            analizar.main()
+
+        with open("public/index.html", encoding="utf-8") as f:
+            contenido = f.read()
+        self.assertIn("Commit: <code>abc1234</code>", contenido)
+        self.assertNotIn("Commit: <code>local</code>", contenido)
 
     def test_main_no_escribe_informe_si_los_datos_son_invalidos(self):
         filas_invalidas = [fila("tt0000001", "Pelicula Uno", "2000", "1000000", "-100")]
