@@ -120,6 +120,54 @@ class TestRechazoDeDatosInvalidos(unittest.TestCase):
             analizar.validar_filas(FIELDNAMES_CHICO, filas)
         self.assertIn("year", "\n".join(cm.exception.errores))
 
+    def test_rechazo_de_budget_absurdamente_alto(self):
+        """budget por encima de BUDGET_MAXIMO debe rechazarse, aunque sea
+        un numero finito no negativo valido (p. ej. un cero de mas por
+        error de tipeo). domgross no tiene este tope."""
+        filas = [
+            fila("tt0000001", "Pelicula con typo de presupuesto", "2000",
+                 "20000000000", "2000000"),  # 20 mil millones: un cero de mas
+        ]
+        with self.assertRaises(analizar.DatosInvalidos) as cm:
+            analizar.validar_filas(FIELDNAMES_CHICO, filas)
+        mensaje = "\n".join(cm.exception.errores)
+        self.assertIn("fila 2", mensaje)
+        self.assertIn("budget", mensaje)
+        self.assertIn("tope realista", mensaje)
+
+    def test_budget_en_el_limite_realista_se_acepta(self):
+        """Un budget alto pero realista (p. ej. 425 millones, el mas alto
+        del CSV original) no debe rechazarse por el tope."""
+        filas = [fila("tt0000001", "Pelicula cara", "2012", "425000000", "500000000")]
+        peliculas = analizar.validar_filas(FIELDNAMES_CHICO, filas)
+        self.assertEqual(peliculas[0]["budget"], 425_000_000)
+
+    def test_rechazo_de_budget_con_formato_invalido(self):
+        """budget debe ser SOLO digitos (y como mucho un punto decimal):
+        comas, simbolos, signo '+' y notacion cientifica se rechazan,
+        aunque algunos (como '+500' o '1e7') son numeros validos para
+        Python."""
+        valores_invalidos = ["13,000,000", "$13000000", "13000000 USD", "+13000000", "1.3e7"]
+        for valor in valores_invalidos:
+            with self.subTest(valor=valor):
+                filas = [fila("tt0000001", "Pelicula", "2000", valor, "2000000")]
+                with self.assertRaises(analizar.DatosInvalidos) as cm:
+                    analizar.validar_filas(FIELDNAMES_CHICO, filas)
+                mensaje = "\n".join(cm.exception.errores)
+                self.assertIn("budget", mensaje)
+                self.assertIn("formato invalido", mensaje)
+
+    def test_budget_con_formato_valido_se_acepta(self):
+        """Solo digitos y, como mucho, un punto decimal: debe aceptarse
+        normalmente (sin falsos positivos del chequeo de formato)."""
+        filas = [
+            fila("tt0000001", "Pelicula entera", "2000", "13000000", "2000000"),
+            fila("tt0000002", "Pelicula con decimales", "2001", "13000000.50", "2000000"),
+        ]
+        peliculas = analizar.validar_filas(FIELDNAMES_CHICO, filas)
+        self.assertEqual(peliculas[0]["budget"], 13_000_000)
+        self.assertEqual(peliculas[1]["budget"], 13_000_000.5)
+
     def test_sin_registros_se_detiene(self):
         """Un CSV con solo cabecera (sin filas) tambien debe detenerse."""
         with self.assertRaises(analizar.DatosInvalidos):

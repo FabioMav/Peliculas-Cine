@@ -74,6 +74,16 @@ Reglas:
   ejemplo en la fila de *The Frozen Ground* (`tt2005374`), que no tiene
   `domgross` (hay 17 peliculas asi en el archivo original). Si el valor
   esta presente, debe ser un numero finito no negativo.
+- `budget`, ademas, no puede superar **2,000 millones de USD** (el
+  presupuesto real mas alto del CSV original es ~425 millones; el tope da
+  margen amplio pero atrapa errores de tipeo, como un cero de mas).
+  `domgross` no tiene este tope.
+- `budget`, ademas, debe ser **solo digitos** (y como mucho un punto
+  decimal): nada de comas de miles, simbolos de moneda, texto, espacios,
+  signo `+` ni notacion cientifica (`1e7`). Comas, espacios, `$` y letras
+  ya quedaban afuera de por si (no son numeros validos), pero esta regla
+  cierra casos como `+13000000` o `1.3e7`, que son numeros validos para
+  Python pero no "solo digitos". `domgross` no tiene esta regla.
 - `domgross` son ingresos de taquilla en Estados Unidos, en dolares
   nominales del ano de estreno. No se suma con `intgross` ni se mezcla con
   columnas ajustadas por inflacion. El informe tampoco calcula "beneficio"

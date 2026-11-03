@@ -23,6 +23,14 @@ Reglas de validacion, segun la consigna:
       vacios (se puede comprobar con la fila de budget/domgross faltante
       mas cercana), asi que este programa trata NA, "#N/A" y la cadena
       vacia como la misma marca de dato faltante.
+  - budget: ademas, si esta presente, no puede superar BUDGET_MAXIMO (un
+    tope realista para atrapar errores de tipeo, p. ej. un cero de mas).
+    domgross no tiene este tope.
+  - budget: ademas, si esta presente, debe ser SOLO digitos (y como mucho
+    un punto decimal): nada de comas de miles, simbolos de moneda, signo
+    "+" ni notacion cientifica (1e7). Comas/espacios/"$"/letras ya
+    quedaban afuera porque float() los rechaza; esto cierra el hueco de
+    "+500" y "1e7", que float() si acepta. domgross no tiene esta regla.
   - domgross = ingresos de taquilla en Estados Unidos, en dolares nominales
     del ano de estreno. No se suma con intgross ni con columnas ajustadas
     por inflacion (budget_2013$, domgross_2013$, intgross_2013$): esas
@@ -36,6 +44,7 @@ Reglas de validacion, segun la consigna:
 import csv
 import html
 import os
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -50,6 +59,21 @@ URL_LICENCIA = "https://creativecommons.org/licenses/by/4.0/"
 
 COLUMNAS_OBLIGATORIAS = ["imdb", "title", "year", "budget", "domgross"]
 MARCAS_FALTANTE = {"", "NA", "#N/A"}
+
+# Validacion extra: budget no puede superar un tope realista. El budget
+# real mas alto del CSV original es ~425 millones de USD (una pelicula de
+# gran presupuesto); 2,000 millones de USD da un margen amplio sin bloquear
+# ninguna pelicula real, pero atrapa errores de tipeo como un cero de mas
+# (p. ej. 20,000,000,000 en vez de 2,000,000,000).
+BUDGET_MAXIMO = 2_000_000_000
+
+# Validacion extra: budget debe ser SOLO digitos (y, como mucho, un punto
+# decimal) - nada de comas de miles, simbolos de moneda, espacios, signo
+# "+", notacion cientifica (1e7) ni ningun otro caracter. Las comas,
+# espacios, "$" y letras ya quedaban afuera porque float() los rechaza; lo
+# que este patron cierra es la notacion cientifica y el signo "+", que
+# float() si acepta sin problema (float("1e7") y float("+500") funcionan).
+PATRON_BUDGET_SOLO_DIGITOS = re.compile(r"\d+(\.\d+)?")
 
 
 class DatosInvalidos(Exception):
@@ -87,12 +111,24 @@ def validar_estructura(fieldnames):
         )
 
 
-def _valor_numerico_opcional(valor, columna, numero_fila, errores):
+def _valor_numerico_opcional(valor, columna, numero_fila, errores, maximo=None, solo_digitos=False):
     """Para budget/domgross: NA/#N/A/vacio -> None (faltante, nunca 0).
     Si hay valor, debe ser un numero finito no negativo; si no, se agrega
-    un error con fila y columna y se devuelve None para esa fila."""
+    un error con fila y columna y se devuelve None para esa fila.
+    Si se pasa 'maximo', un valor por encima de ese tope tambien se
+    rechaza (se usa para budget, ver BUDGET_MAXIMO).
+    Si se pasa 'solo_digitos=True', el texto debe ser SOLO digitos (y como
+    mucho un punto decimal): rechaza comas, simbolos, signo "+" y notacion
+    cientifica aunque float() los aceptaria (se usa para budget)."""
     texto = "" if valor is None else str(valor).strip()
     if texto in MARCAS_FALTANTE:
+        return None
+    if solo_digitos and not PATRON_BUDGET_SOLO_DIGITOS.fullmatch(texto):
+        errores.append(
+            f"fila {numero_fila}, columna '{columna}': formato invalido, debe "
+            f"contener solo digitos (y opcionalmente un punto decimal), sin "
+            f"comas, simbolos ni letras (se encontro {texto!r})"
+        )
         return None
     try:
         numero = float(texto)
@@ -107,6 +143,12 @@ def _valor_numerico_opcional(valor, columna, numero_fila, errores):
         errores.append(
             f"fila {numero_fila}, columna '{columna}': debe ser un numero finito no "
             f"negativo (se encontro {texto!r})"
+        )
+        return None
+    if maximo is not None and numero > maximo:
+        errores.append(
+            f"fila {numero_fila}, columna '{columna}': supera el tope realista "
+            f"de {maximo:,.0f} (se encontro {texto!r})"
         )
         return None
     return numero
@@ -178,7 +220,10 @@ def validar_filas(fieldnames, filas):
                     f"(se encontro {year_texto!r})"
                 )
 
-        budget = _valor_numerico_opcional(fila.get("budget"), "budget", numero_fila, errores)
+        budget = _valor_numerico_opcional(
+            fila.get("budget"), "budget", numero_fila, errores,
+            maximo=BUDGET_MAXIMO, solo_digitos=True,
+        )
         domgross = _valor_numerico_opcional(fila.get("domgross"), "domgross", numero_fila, errores)
 
         # Solo construimos la pelicula si imdb/title/year son utilizables;
